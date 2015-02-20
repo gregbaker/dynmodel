@@ -51,7 +51,7 @@ class Model(object):
         self.terminal = terminal_quality
         self.possibilities = possible_outcomes
         self.deadfitness = dead_fitness
-        self.impossiblefitness = impossible_fitness
+        self.impossible_fitness = impossible_fitness
         self.dec_type = dec_type
 
         self.qual_filename = qual_filename
@@ -91,25 +91,25 @@ class Model(object):
         # mistake somewhere else.
         return (self.tmax-1,) + self.vars.shape()
     
-    def __create_qualarray(self):
+    def __create_qualarray(self, mode='w+'):
         """
         Allocate the quality array for this model, if not already done.
         """
         if self.__qual != None:
             return
 
-        self.__qual = memmap(filename=self.qual_filename, mode='w+', shape=self.__qualarraydim(), dtype=qual_type)
+        self.__qual = memmap(filename=self.qual_filename, mode=mode, shape=self.__qualarraydim(), dtype=qual_type)
         self.__filledqual = False
         self.__filledterminal = False
 
-    def __create_decarray(self):
+    def __create_decarray(self, mode='w+'):
         """
         Allocate the decision array for this model, if not already done.
         """
         if self.__dec != None:
             return
 
-        self.__dec = memmap(filename=self.dec_filename, mode='w+', shape=self.__decarraydim(), dtype=self.dec_type)
+        self.__dec = memmap(filename=self.dec_filename, mode=mode, shape=self.__decarraydim(), dtype=self.dec_type)
         self.__filleddec = False
 
     def __create_distribarray(self):
@@ -303,15 +303,8 @@ class Model(object):
         
         dec = self.decision0(t, state)
         outcomes = self.possibilities(self, t, *state)
-        #print "--",dec
-        #print t, state
-        #print outcomes
-        #print
         state, descr = outcomes.choose_outcome(dec)
         return dec, state, descr
-
-    def __identity(self, x):
-        return x
 
     def monte_carlo_run(self, start, tmax=None, dyn_time=None,
             report_step=None, report_final=None):
@@ -337,7 +330,7 @@ class Model(object):
         if tmax!=self.tmax and dyn_time==None:
             raise ValueError, "If you set tmax, you must give a time conversion function (dyn_time)"
         if dyn_time==None:
-            dyn_time = self.__identity
+            dyn_time = lambda x: x
         
         
         while t<tmax-1:
@@ -476,102 +469,41 @@ class Model(object):
             self.__distrib[ self.index(0, state) ] = 0
 
         # seed at the given state
-	if initial_state!=None and initial_function!=None:
-	    raise "Can't specify both initial_state and initial_function."
-	elif initial_state!=None:
+        if initial_state!=None and initial_function!=None:
+            raise ValueError, "Can't specify both initial_state and initial_function."
+        elif initial_state!=None:
             assert hasattr(initial_state, '__iter__') # isiterable
             assert len(initial_state) == self.__len
             assert type(num) == int
             # set all states to zero individuals, and put individuals
-	    # at one state
+            # at one state
             for state in self.vars.allvalues():
                 self.__distrib[ self.index(0, state) ] = 0
             self.__distrib[ self.index(0, initial_state) ] = num
-	elif initial_function!=None:
-	    assert callable(initial_function)
-	    # Fill t=0 from given function
-	    for state in self.vars.allvalues():
+        elif initial_function!=None:
+            assert callable(initial_function)
+            # Fill t=0 from given function
+            for state in self.vars.allvalues():
                 self.__distrib[ self.index(0, state) ] = initial_function(*state)
-	else:
-	    raise "Must specify either initial_state or initial_function."
+        else:
+            raise ValueError, "Must specify either initial_state or initial_function."
         
         # go through time, filling in the number that get to each state.
         for t in xrange(self.tmax-1):
-	    self.distrib_time(t)
-
-
-        #print self.__distrib
+            self.distrib_time(t)
 
 
     #################################################################
     # File I/O functions
 
-    def write_dec_file(self, filename):
-        """
-        Write the decision data out to a file called filename.
-        """
-        sys.stderr.write("writing decision file\n" )
-        fh = file(filename, "wb")
-        fh.write("Python dynmodel dec %s\n%s %s\n\0"
-                % (version, self.dec_type, self.__decarraydim()) )
-        self.__dec.tofile(fh)
-
-        fh.close()
-
-    def write_qual_file(self, filename):
-        """
-        Write the quality data out to a file called filename.
-        """
-        fh = file(filename, "wb")
-        #fh.write("Python dynmodel qual %s\n%s %s\n\0"
-        #        % (version, qual_type, self.__qualarraydim()) )
-        sys.stderr.write("writing quality file\n" )
-        self.__qual.tofile(fh)
-        fh.close()
-
-    def read_dec_file(self,filename):
-        """
-        Read the decision data from the given file.
-        """
-        sys.stderr.write("loading decision file\n" )
-        fh = file(filename, "rb")
-
-        # eat magic lines
-        while True:
-            ch = fh.read(1)
-            if ch=="\0":
-                break
-
-        self.__dec = fromfile(fh, self.dec_type, self.__decarraydim())
-
-        fh.close()
-        self.__filleddec = True
-
-    def read_qual_file(self,filename):
-        """
-        Read the quality data from the given file.
-        """
-        sys.stderr.write("loading quality file\n" )
-        fh = file(filename, "rb")
-
-        # eat magic lines
-        #while True:
-        #    ch = fh.read(1)
-        #    if ch=="\0":
-        #        break
-
-        self.__qual = fromfile(fh, qual_type, self.__qualarraydim())
-
-        fh.close()
-        self.__filledqual = True
-        self.__filledterminal = True
-
-    def read_files(self, qualfile, decfile):
+    def read_files(self):
         """
         Read the quality and decision data from the given files.
         """
-        self.read_qual_file(decfile)
-        self.read_dec_file(decfile)
+        self.__create_decarray(mode='r+')
+        self.__create_qualarray(mode='r+')
+        self.__filleddec = True
+        self.__filledqual = True
 
 
     #################################################################
