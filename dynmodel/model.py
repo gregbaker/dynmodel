@@ -3,10 +3,10 @@ import random
 from variables import Variable, StateVariables
 
 try:
-    from interpolatex import interpn
+    from criticalx import interpn, index
 except ImportError:
     sys.stderr.write("Can't import Cython implementation. Falling back to slower pure-Python.\n")
-    from interpolate import interpn
+    from critical import interpn, index
 
 if __debug__:
     import types
@@ -139,7 +139,7 @@ class Model(object):
         assert t <= self.tmax
 
         #ind = [x-var.minval for x,var in zip(state, self.vars.all())]
-        return (t,) + tuple(state)
+        return index(t, state)
         
     def quality(self, t, *state):
         """
@@ -176,49 +176,6 @@ class Model(object):
     #################################################################
     # Linear Interpolation
 
-    def __interpn(self, n, t, state):
-        """
-        Recursively interpolate state variables 0..n.
-        """
-        # If anybody ever gets the idea to speed something up by coding in
-        # C or Pyrex, do this one.  It's typically half the total running time.
-        if n<0:
-            # recursive base-case
-            return self.qual0(t, state)
-            
-        xc = state[n]
-        var = self.vars[n]
-
-        # check variable bounds
-        if xc < 0:
-            state[n] = 0
-            return self.__interpn(n-1, t, state)  # is that okay in general?
-        if xc >= var.size() - 1:
-            state[n] = var.size() - 1
-            return self.__interpn(n-1, t, state)
-
-        if var.discrete():
-            # discrete variable: no need to interpolate
-            assert int(xc)==xc, "discrete variable given non-integer value: state=" + str(state)
-            return self.__interpn(n-1, t, state)
-        
-        x = int(xc)
-        if x==xc:
-            # integer: no need to interpolate
-            state[n] = x
-            return self.__interpn(n-1, t, state)
-
-        dx = xc-x
-        
-        # manipulate state in-place; recurse; clean up at the end
-        state[n] = x
-        fit = (1-dx) * self.__interpn(n-1, t, state)
-        state[n] = x+1
-        fit += dx * self.__interpn(n-1, t, state)
-        state[n] = xc # restore, so backtracks are unaffected
-        
-        return fit
-        
     def interp(self, t, *state):
         """
         Interpolate to (possibly) fractional values of the state
@@ -229,7 +186,7 @@ class Model(object):
 
         state = list(state) # needs to be mutable for the recursive algorithm
         #return self.__interpn(self.__lenm1, t, state)
-        return interpn(self.qual0, self.vars, self.__lenm1, t, state)
+        return interpn(self.__qual, self.vars, self.__lenm1, t, state)
 
     
     #################################################################
@@ -637,10 +594,4 @@ class Model(object):
         tvar = Variable(self.tmax, "time", False)
         vars = [tvar] + self.vars.all()
         return subarray.SubArray(self.__distrib, vars)
-    
-    def draw_regions(self, clr, slices):
-        raise # dead function
-        import regions
-        regions.draw_regions(self, clr, slices)
-
 

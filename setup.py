@@ -7,7 +7,7 @@ except ImportError:
 
 
 if have_cython:
-    ext_modules = cythonize('dynmodel/interpolatex.pyx')
+    ext_modules = cythonize('dynmodel/criticalx.pyx')
 else:
     ext_modules = []
 
