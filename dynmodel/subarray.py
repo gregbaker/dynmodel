@@ -1,5 +1,4 @@
 import csv, copy, itertools
-import regions
 
 def ceil_div(a,b):
     """
@@ -169,5 +168,6 @@ class SubArray(object):
             sqwidth=10, sqheight=10
             ):
         assert self.__dim==2, "can only create space diagram 2-dimensional slices"
+        import regions
 
         regions.draw_regions(self, filename, colour, sqwidth=sqwidth, sqheight=sqheight)
